@@ -1,0 +1,51 @@
+# Engrafo demo with its own SQL Server. Based on the installer's
+# docker-compose.template.yml, with all choices made in advance.
+# Start: docker compose up -d   Then open http://localhost:81
+
+# Fixed project name, so the database volume is the same whichever folder this runs from
+name: engrafo
+
+services:
+  #Below is the database
+  engrafo_db:
+    image: mcr.microsoft.com/mssql/server:2025-latest
+    container_name: engrafo_db
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=yourStrong(!)Password
+    ports:
+      - "1434:1433"
+    volumes:
+      - engrafo_db_sql_data:/var/opt/mssql
+    networks:
+      - engrafonetwork
+    healthcheck:
+      test: [ "CMD-SHELL", "grep 'SQL Server is now ready for client connections' /var/opt/mssql/log/errorlog || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Below is the app
+  engrafo:
+    image: engrafo/engrafo-data-catalog:latest
+    ports:
+      - "81:8080"
+    depends_on:
+      engrafo_db:
+        condition: service_healthy
+    volumes:
+      # Autoupload folder, created next to this file
+      - "./uploads:/app/wwwroot/uploads_CSVAuto"
+    networks:
+      - engrafonetwork
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: "http://0.0.0.0:8080"
+      ConnectionStrings__DefaultConnection: "Server=engrafo_db;Database=Engrafo_DB;User ID=sa;Password=yourStrong(!)Password;TrustServerCertificate=True;"
+
+networks:
+  engrafonetwork:
+    driver: bridge
+
+volumes:
+  engrafo_db_sql_data:
